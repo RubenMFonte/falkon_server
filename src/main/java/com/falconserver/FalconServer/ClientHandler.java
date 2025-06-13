@@ -20,6 +20,26 @@ public class ClientHandler implements Runnable {
 	public ClientHandler(Socket socket) {
 		this.socket = socket;
 	}
+	
+	private enum MethodType {
+	    GET,
+	    POST,
+	    UNKNOWN;  // fallback for unsupported/unknown methods
+
+	    public static MethodType fromString(String method) {
+	        if (method == null) {
+	            return UNKNOWN;
+	        }
+	        switch (method.toUpperCase()) {
+	            case "GET":
+	                return GET;
+	            case "POST":
+	                return POST;
+	            default:
+	                return UNKNOWN;
+	        }
+	    }
+	}
 
 	@Override
 	public void run() {
@@ -28,8 +48,6 @@ public class ClientHandler implements Runnable {
 			BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			BufferedWriter out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
 		) {
-			
-			System.out.println("Thread started: " + Thread.currentThread().getName());
 			
 			String request = in.readLine();
 			
@@ -42,9 +60,9 @@ public class ClientHandler implements Runnable {
 			}
 			else {
 				
-				String method = requestParts[0];
+				MethodType type = MethodType.fromString(requestParts[0]);
 				
-				if (!method.equals("GET")) {
+				if (type == MethodType.UNKNOWN) {
 				    out.write(Utils.getHttpResponse(Utils.STATUSCODE_405, Utils.CONTENTTYPE_PLAIN, "Method is not supported."));
 				    return;
 				}
@@ -60,11 +78,18 @@ public class ClientHandler implements Runnable {
 				
 				Map<String, String> queryParams = parseQueryParams(query);
 				
+				String body = null;
+				
+				if(type == MethodType.POST) {
+					
+					body = parseRequestBody(in);
+				}
+				
 				RouteHandler handler = Router.getInstance().getRouteHandler(path);
 				
 				String response = "";
 				
-				if(handler != null) response = handler.handle(queryParams);
+				if(handler != null) response = handler.handle(queryParams, body);
 				else response = Utils.getFileContent(path);
 					
 				out.write(response);
@@ -79,7 +104,7 @@ public class ClientHandler implements Runnable {
 		
 	}
 	
-	public String[] splitPathAndQuery(String fullPath) {
+	private String[] splitPathAndQuery(String fullPath) {
 	    int queryIndex = fullPath.indexOf('?');
 	    
 	    if (queryIndex >= 0) {
@@ -91,7 +116,7 @@ public class ClientHandler implements Runnable {
 	    }
 	}
 
-	public Map<String,String> parseQueryParams(String query) {
+	private Map<String,String> parseQueryParams(String query) {
 
 		Map<String, String> queryParams = new HashMap<>();
 		
@@ -106,5 +131,34 @@ public class ClientHandler implements Runnable {
 		}
 		
 		return queryParams;
+	}
+
+	private String parseRequestBody(BufferedReader in) {
+		
+		int contentLength = 0;
+		
+		String line;
+		
+		try {
+			
+			while (!(line = in.readLine()).isEmpty()) {
+				
+			    if (line.startsWith("Content-Length:")) {
+			    	
+			        contentLength = Integer.parseInt(line.substring("Content-Length:".length()).trim());
+			    }
+			}
+			
+			char[] body = new char[contentLength];
+			
+			in.read(body, 0, contentLength);
+			
+			return new String(body);
+		}
+		catch (IOException ex) {
+			System.out.println("Error handling request/nMessage: " + ex.getMessage());
+			return null;
+		}
+		
 	}
 }
