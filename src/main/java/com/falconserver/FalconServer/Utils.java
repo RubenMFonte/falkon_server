@@ -16,7 +16,7 @@ public class Utils {
 	final static String STATUSCODE_405 = "405 Method Not Allowed";
 	final static String STATUSCODE_500 = "500 Internal Server Error";
 	
-	public static String getFileContent(String path) {
+	public static String getFileContent(String path, Session session) {
 		
 		if(path.equals("/")) {
 			path = "/index.html";
@@ -52,18 +52,27 @@ public class Utils {
 		else return getHttpResponse(STATUSCODE_404, CONTENTTYPE_PLAIN, "Page not found!");
 	}
 	
-	public static String getHttpResponse(String status, String contentType, String content) {
+	public static String getHttpResponseWithSession(String status, String contentType, String sessionId, String content) {
 		return "HTTP/1.1 " + status + "\r\n" +
 		        "Content-Type: " + contentType + "\r\n" +
+		        (sessionId != null ? "Set-Cookie: " + sessionId + "\r\n" : "") +
 		        "Content-Length: " + content.length() + "\r\n" +
 		        "Connection: close\r\n" +
 		        "\r\n" +
 		        content;
 	}
 	
+	public static String getHttpResponse(String status, String contentType, String content) {
+		return getHttpResponseWithSession(status, contentType, null, content);
+	}
+	
 	private static String getContentType(String filename) {
 		if(filename.endsWith(".html")) return CONTENTTYPE_HTML;
 		if(filename.endsWith(".css")) return CONTENTTYPE_CSS;
 		return CONTENTTYPE_DEFAULT;
+	}
+	
+	public static long getMinutesInMillis(int minutes) {
+		return minutes * 60 * 1000;
 	}
 }

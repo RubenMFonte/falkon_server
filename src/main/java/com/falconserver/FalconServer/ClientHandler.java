@@ -67,6 +67,8 @@ public class ClientHandler implements Runnable {
 				    return;
 				}
 				
+				// Path and Query
+				
 				String fullPath = requestParts[1];
 				
 				String[] pathAndQuery = splitPathAndQuery(fullPath);
@@ -78,19 +80,27 @@ public class ClientHandler implements Runnable {
 				
 				Map<String, String> queryParams = parseQueryParams(query);
 				
+				// Session cookies
+				
+				Session clientSession = getClientSession(in);
+		        
+				// Request body
+				
 				String body = null;
 				
 				if(type == MethodType.POST) {
 					
 					body = parseRequestBody(in);
 				}
+
+				// Response
 				
 				RouteHandler handler = Router.getInstance().getRouteHandler(path);
 				
 				String response = "";
 				
-				if(handler != null) response = handler.handle(queryParams, body);
-				else response = Utils.getFileContent(path);
+				if(handler != null) response = handler.handle(queryParams, clientSession, body);
+				else response = Utils.getFileContent(path, clientSession);
 					
 				out.write(response);
 			}
@@ -160,5 +170,40 @@ public class ClientHandler implements Runnable {
 			return null;
 		}
 		
+	}
+	
+	private Session getClientSession(BufferedReader in) {
+		
+		try {
+			
+			String line;
+	        String sessionId = null;
+	        
+	        while ((line = in.readLine()) != null && !line.isEmpty()) {
+	            if (line.startsWith("Cookie:")) {
+	                String[] cookies = line.substring(7).split(";");
+	                for (String cookie : cookies) {
+	                    String[] pair = cookie.trim().split("=");
+	                    if (pair.length == 2 && pair[0].equals("SESSIONID")) {
+	                        sessionId = pair[1];
+	                    }
+	                }
+	            }
+	        }
+	        
+	        SessionManager sm = SessionManager.getInstance();
+	        Session session = (sessionId != null) ? sm.getSession(sessionId) : null;
+	
+	        if (session == null) {
+	            session = sm.createSession();
+	            session.setNewSession(true);
+	        }
+	        
+	        return session;
+		}
+		catch (IOException ex) {
+			System.out.println("Error handling request/nMessage: " + ex.getMessage());
+			return null;
+		}
 	}
 }
